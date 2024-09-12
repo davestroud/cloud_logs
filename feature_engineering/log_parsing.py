@@ -1,6 +1,6 @@
 import csv
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 def parse_ec2_logs(log_entry):
     timestamp, hostname, process, pid, user, log_message = log_entry
@@ -75,7 +75,7 @@ def parse_vpc_logs(log_entry):
     resource_type = "VPC"
     
     return {
-        "timestamp": datetime.utcfromtimestamp(int(StartTime)).strftime('%Y-%m-%d %H:%M:%S'),
+        "timestamp": datetime.fromtimestamp(int(StartTime), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
         "event_type": "VPC Flow Log",
         "userIdentity": {"role": "IAMUser", "user": User},
         "source IP": SrcAddr,
@@ -90,28 +90,28 @@ def parse_logs():
     structured_logs = []
 
     # Parse EC2 logs
-    with open('data/_creation/ec2_logs.csv', 'r') as file:
+    with open('data/ec2_logs.csv', 'r') as file:
         reader = csv.reader(file)
         next(reader)  # Skip header
         for row in reader:
             structured_logs.append(parse_ec2_logs(row))
 
     # Parse Lambda logs
-    with open('data/_creation/lambda_logs.csv', 'r') as file:
+    with open('data/lambda_logs.csv', 'r') as file:
         reader = csv.reader(file)
         next(reader)  # Skip header
         for row in reader:
             structured_logs.append(parse_lambda_logs(row))
 
     # Parse S3 logs
-    with open('data/_creation/s3_logs.csv', 'r') as file:
+    with open('data/s3_logs.csv', 'r') as file:
         reader = csv.reader(file)
         next(reader)  # Skip header
         for row in reader:
             structured_logs.append(parse_s3_logs(row))
 
     # Parse VPC logs
-    with open('data/_creation/vpc_flow_logs.csv', 'r') as file:
+    with open('data/vpc_flow_logs.csv', 'r') as file:
         reader = csv.reader(file)
         next(reader)  # Skip header
         for row in reader:
