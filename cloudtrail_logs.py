@@ -4,10 +4,8 @@ import datetime
 import pandas as pd
 from pandas import json_normalize
 
-#TODO: Add root user for user identity type
-# Define a consistent set of users
 users = [
-    {+
+    {
         "userIdentity": {
             "type": "IAMUser",
             "principalId": "AID1234567890",
