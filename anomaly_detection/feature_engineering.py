@@ -59,5 +59,10 @@ logs_df = aggregate_session_features(logs_df)
 # Reset the index after aggregation
 logs_df.reset_index(inplace=True)
 
+logs_df.to_csv("/Users/davidstroud/cloud_logs/anomaly_detection/engineered_logs.csv", index=False)
+
 # Display the DataFrame with the new features
 print(logs_df.head())
+
+
+

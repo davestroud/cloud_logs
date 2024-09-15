@@ -87,12 +87,12 @@ def parse_logs_to_csv():
             structured_logs.append(parse_vpc_logs(row))
     
     # Write to CSV file
-    with open('/Users/davidstroud/cloud_logs/data/structured_logs.csv', 'w', newline='') as csvfile:
+    with open('/Users/davidstroud/cloud_logs/anomaly_detection/structured_logs.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(header)
         writer.writerows(structured_logs)
 
-    print("Log parsing complete. Data saved to '/Users/davidstroud/cloud_logs/data/structured_logs.csv'")
+    print("Log parsing complete. Data saved to '/Users/davidstroud/cloud_logs/anomaly_detection/structured_logs.csv'")
 
 # Run the log parsing and save to CSV
 parse_logs_to_csv()
