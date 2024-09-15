@@ -1,11 +1,9 @@
 import csv
-import json
 from datetime import datetime, timezone
 
 def parse_ec2_logs(log_entry):
     timestamp, hostname, process, pid, user, log_message = log_entry
     
-    # Extract action and resource type from log_message if applicable
     action = "Unknown"
     resource_type = "EC2"
     if "High CPU" in log_message:
@@ -15,21 +13,13 @@ def parse_ec2_logs(log_entry):
     elif "patch" in log_message:
         action = "SecurityPatch"
     
-    return {
-        "timestamp": timestamp,
-        "event_type": "EC2 Log",
-        "userIdentity": {"role": "IAMUser", "user": user},
-        "source IP": hostname,  # Assuming hostname as the source IP for simplicity
-        "region": "us-east-1",  # Can be inferred or left blank
-        "response_code": None,  # Not available in EC2 logs
-        "resource_type": resource_type,
-        "action": action
-    }
+    return [
+        timestamp, "EC2 Log", "IAMUser", user, hostname, "us-east-1", None, resource_type, action
+    ]
 
 def parse_lambda_logs(log_entry):
     timestamp, request_id, log_type, message = log_entry
     
-    # Extract action based on log_type and message
     action = log_type
     resource_type = "Lambda"
     
@@ -40,16 +30,9 @@ def parse_lambda_logs(log_entry):
     else:
         response_code = None
     
-    return {
-        "timestamp": timestamp,
-        "event_type": "Lambda Log",
-        "userIdentity": {"role": "IAMUser", "user": message.split(' ')[-1]},
-        "source IP": None,
-        "region": "us-east-1",
-        "response_code": response_code,
-        "resource_type": resource_type,
-        "action": action
-    }
+    return [
+        timestamp, "Lambda Log", "IAMUser", message.split(' ')[-1], None, "us-east-1", response_code, resource_type, action
+    ]
 
 def parse_s3_logs(log_entry):
     request_id, ip_address, timestamp, bucket_name, file_name, http_method, status_code, bytes_sent, request_time, user_agent, user = log_entry
@@ -57,16 +40,9 @@ def parse_s3_logs(log_entry):
     action = f"S3 {http_method}"
     resource_type = "S3"
     
-    return {
-        "timestamp": timestamp,
-        "event_type": "S3 Log",
-        "userIdentity": {"role": "IAMUser", "user": user},
-        "source IP": ip_address,
-        "region": "us-east-1",  # Can be inferred or added manually
-        "response_code": status_code,
-        "resource_type": resource_type,
-        "action": action
-    }
+    return [
+        timestamp, "S3 Log", "IAMUser", user, ip_address, "us-east-1", status_code, resource_type, action
+    ]
 
 def parse_vpc_logs(log_entry):
     Version, AccountId, InterfaceId, SrcAddr, DstAddr, SrcPort, DstPort, Protocol, Packets, Bytes, StartTime, EndTime, Action, LogStatus, User = log_entry
@@ -74,20 +50,13 @@ def parse_vpc_logs(log_entry):
     action = "VPC Flow"
     resource_type = "VPC"
     
-    return {
-        "timestamp": datetime.fromtimestamp(int(StartTime), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
-        "event_type": "VPC Flow Log",
-        "userIdentity": {"role": "IAMUser", "user": User},
-        "source IP": SrcAddr,
-        "region": "us-east-1",  # Can be inferred or added manually
-        "response_code": LogStatus,
-        "resource_type": resource_type,
-        "action": action
-    }
+    return [
+        datetime.fromtimestamp(int(StartTime), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'), "VPC Flow Log", "IAMUser", User, SrcAddr, "us-east-1", LogStatus, resource_type, action
+    ]
 
-# Parse each log file
-def parse_logs():
+def parse_logs_to_csv():
     structured_logs = []
+    header = ["timestamp", "event_type", "user_role", "user", "source_IP", "region", "response_code", "resource_type", "action"]
 
     # Parse EC2 logs
     with open('data/ec2_logs.csv', 'r') as file:
@@ -117,11 +86,13 @@ def parse_logs():
         for row in reader:
             structured_logs.append(parse_vpc_logs(row))
     
-    return structured_logs
+    # Write to CSV file
+    with open('structured_logs.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(header)
+        writer.writerows(structured_logs)
 
-# Convert logs to JSON and save
-parsed_logs = parse_logs()
-with open('structured_logs.json', 'w') as json_file:
-    json.dump(parsed_logs, json_file, indent=4)
+    print("Log parsing complete. Data saved to 'structured_logs.csv'")
 
-print("Log parsing complete. Data saved to 'structured_logs.json'")
+# Run the log parsing and save to CSV
+parse_logs_to_csv()
