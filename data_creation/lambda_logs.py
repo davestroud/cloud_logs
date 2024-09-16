@@ -39,6 +39,9 @@ users = [
     }
 ]
 
+# Define possible log types and corresponding response codes
+log_types = [("START", "200"), ("ERROR", "403"), ("INFO", "200"), ("END", "200"), ("PROCESS", "202")]
+
 # Function to get a random user
 def get_random_user():
     return random.choice(users)["userIdentity"]
@@ -63,17 +66,20 @@ def generate_lambda_logs(num_records=10000):
         # Use the same user for Lambda activity
         user = get_random_user()
 
+        # Include response code in the start log
+        log_type, response_code = random.choice(log_types)
+
         lambda_logs.append({
             'timestamp': start_time,
             'request_id': request_id,
-            'log_type': 'START',
-            'message': f"RequestId: {request_id} Version: $LATEST User: {user['userName']}"
+            'log_type': log_type,
+            'message': f"RequestId: {request_id} Version: $LATEST User: {user['userName']} ResponseCode: {response_code}"
         })
         
         # Generate log entries with random timestamps, types, and messages
         for _ in range(random.randint(1, 5)):  # Generate between 1 and 5 log entries per invocation
             timestamp = random_time_within_last_two_weeks()
-            log_type = random.choice(['INFO', 'ERROR', 'DEBUG', 'WARN'])
+            log_type, response_code = random.choice(log_types)
             log_message = random.choice([
                 "Processing event",
                 "Fetching data from database",
@@ -91,7 +97,7 @@ def generate_lambda_logs(num_records=10000):
                 'timestamp': timestamp,
                 'request_id': request_id,
                 'log_type': log_type,
-                'message': log_message
+                'message': f"{log_message} ResponseCode: {response_code}"
             })
         
         # Generate an end log and a report log with random values for durations and memory usage
@@ -105,14 +111,14 @@ def generate_lambda_logs(num_records=10000):
             'timestamp': end_time,
             'request_id': request_id,
             'log_type': 'END',
-            'message': f"RequestId: {request_id} User: {user['userName']}"
+            'message': f"RequestId: {request_id} User: {user['userName']} ResponseCode: 200"
         })
         
         lambda_logs.append({
             'timestamp': end_time,
             'request_id': request_id,
             'log_type': 'REPORT',
-            'message': f"Duration: {duration} ms Billed Duration: {billed_duration} ms Memory Size: {memory_size} MB Max Memory Used: {max_memory_used} MB User: {user['userName']}"
+            'message': f"Duration: {duration} ms Billed Duration: {billed_duration} ms Memory Size: {memory_size} MB Max Memory Used: {max_memory_used} MB User: {user['userName']} ResponseCode: 200"
         })
     
     return lambda_logs
@@ -127,4 +133,4 @@ def write_lambda_logs_to_csv(filename, logs):
 
 # Generate 10,000 synthetic Lambda Logs and write to a CSV file
 lambda_logs = generate_lambda_logs(10000)
-write_lambda_logs_to_csv('data/lambda_logs.csv', lambda_logs)
+write_lambda_logs_to_csv('/Users/davidstroud/cloud_logs/data/lambda_logs.csv', lambda_logs)

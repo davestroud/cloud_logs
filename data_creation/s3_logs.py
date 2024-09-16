@@ -39,6 +39,9 @@ users = [
     }
 ]
 
+# Define possible HTTP methods and corresponding response codes
+http_methods = [("GET", "200"), ("PUT", "201"), ("DELETE", "204"), ("POST", "200"), ("HEAD", "200")]
+
 # Function to get a random user
 def get_random_user():
     return random.choice(users)["userIdentity"]
@@ -57,8 +60,10 @@ def generate_s3_access_log():
     file_name = f"file{random.randint(1, 1000)}.txt"
     timestamp = random_time_within_last_two_weeks()
     request_id = f"{random.randint(1000000000000000, 9999999999999999)}"
-    http_method = random.choice(["GET", "PUT", "DELETE", "POST"])
-    status_code = random.choice([200, 403, 404, 500])
+    
+    # Select HTTP method and corresponding status code
+    http_method, status_code = random.choice(http_methods)
+    
     bytes_sent = random.randint(1000, 50000)
     request_time = random.randint(10, 500)
     user_agent = random.choice([
@@ -100,4 +105,4 @@ def write_s3_access_logs_to_csv(filename, num_records=10000):
             writer.writerow(log)
 
 # Generate and write 10,000 S3 Access logs with consistent user identities to a CSV file
-write_s3_access_logs_to_csv('data/s3_logs.csv', 10000)
+write_s3_access_logs_to_csv('/Users/davidstroud/cloud_logs/data/s3_logs.csv', 10000)

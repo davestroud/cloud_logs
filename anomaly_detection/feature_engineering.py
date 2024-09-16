@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Load the structured logs data
-logs_df = pd.read_csv('/Users/davidstroud/cloud_logs/data/structured_logs.csv', low_memory=False)
+logs_df = pd.read_csv('/Users/davidstroud/cloud_logs/anomaly_detection/structured_logs.csv', low_memory=False)
     
 # Convert timestamp to datetime using more flexible parsing
 logs_df['timestamp'] = pd.to_datetime(logs_df['timestamp'], errors='coerce')
@@ -19,7 +19,7 @@ def is_unusual_hour(hour):
 
 # Apply the function to create the unusual_hour feature
 logs_df['unusual_hour'] = logs_df['hour'].apply(is_unusual_hour)
-
+ 
 # 2. Geographical Anomalies
 # Define the normal operating regions (e.g., only us-east-1 is considered normal)
 normal_regions = ['us-east-1']

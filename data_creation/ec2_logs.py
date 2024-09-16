@@ -98,4 +98,4 @@ def write_ec2_logs_to_csv(filename, logs):
 
 # Generate 10,000 synthetic EC2 Instance Logs and write to a CSV file
 ec2_logs = generate_ec2_logs(10000)
-write_ec2_logs_to_csv('data/ec2_logs.csv', ec2_logs)
+write_ec2_logs_to_csv('/Users/davidstroud/cloud_logs/data/ec2_logs.csv', ec2_logs)

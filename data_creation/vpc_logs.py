@@ -91,4 +91,4 @@ def write_vpc_flow_logs_to_csv(filename, logs):
 
 # Generate 10,000 synthetic VPC Flow Logs with consistent user identities and write to CSV
 vpc_logs = generate_vpc_flow_logs(10000)
-write_vpc_flow_logs_to_csv('data/vpc_flow_logs.csv', vpc_logs)
+write_vpc_flow_logs_to_csv('/Users/davidstroud/cloud_logs/data/vpc_flow_logs.csv', vpc_logs)
