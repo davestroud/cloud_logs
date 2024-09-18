@@ -1,150 +1,121 @@
 import pandas as pd
-import random
-from datetime import datetime, timedelta
+import numpy as np
+from scipy.stats import entropy
 
-# Create a DataFrame with 100,000 rows
-num_rows = 100000
+# Load the dataset
+logs_df = pd.read_csv("/Users/davidstroud/cloud_logs/anomaly_detection/engineered_logs_100k.csv")
 
-# Create a date range for timestamps
-start_date = datetime.now() - timedelta(days=365)
-date_range = [start_date + timedelta(seconds=random.randint(0, 31536000)) for _ in range(num_rows)]
+# 1. Time-Based Features
 
-# Step 1: Create a list of 10 unique users
-user_list = ['user1', 'user2', 'user3', 'user4', 'user5', 'user6', 'user7', 'user8', 'user9', 'user10']
+# Hour Binning: Define bins for different times of the day
+def bin_hours(hour):
+    if 0 <= hour < 6:
+        return 'Night'
+    elif 6 <= hour < 12:
+        return 'Morning'
+    elif 12 <= hour < 18:
+        return 'Afternoon'
+    else:
+        return 'Evening'
 
-# Step 2: Randomly assign users to each log entry
-users = random.choices(user_list, k=num_rows)
+logs_df['time_of_day'] = logs_df['hour'].apply(bin_hours)
 
-# Step 3: Create an uneven distribution of resource types
-resource_types = ['EC2', 'Lambda', 'S3', 'VPC']
-resource_type_distribution = {'EC2': 0.5, 'Lambda': 0.2, 'S3': 0.2, 'VPC': 0.1}
-resource_type_counts = {rtype: int(num_rows * proportion) for rtype, proportion in resource_type_distribution.items()}
+# Extract day of the week
+logs_df['day_of_week'] = pd.to_datetime(logs_df['timestamp']).dt.dayofweek
 
-random_resource_types = []
-for resource_type, count in resource_type_counts.items():
-    random_resource_types.extend([resource_type] * count)
+# Weekday vs. Weekend
+logs_df['is_weekend'] = logs_df['day_of_week'].apply(lambda x: 1 if x >= 5 else 0)
 
-remaining_count = num_rows - len(random_resource_types)
-if remaining_count > 0:
-    random_resource_types.extend([max(resource_type_distribution, key=resource_type_distribution.get)] * remaining_count)
+# 2. Action and Resource Interaction
 
-random.shuffle(random_resource_types)
+# Action Frequency per User
+action_freq = logs_df.groupby(['user', 'action']).size().reset_index(name='action_frequency')
+logs_df = logs_df.merge(action_freq, on=['user', 'action'], how='left')
 
-# Ensure that the length of random_resource_types matches num_rows
-random_resource_types = random_resource_types[:num_rows]
+# Resource Type Frequency per User
+resource_freq = logs_df.groupby(['user', 'resource_type']).size().reset_index(name='resource_frequency')
+logs_df = logs_df.merge(resource_freq, on=['user', 'resource_type'], how='left')
 
-# Step 4: Create event types based on resource types
-def assign_event_type(resource_type):
-    if resource_type == 'EC2':
-        return 'EC2 Log'
-    elif resource_type == 'VPC':
-        return 'VPC Flow Log'
-    elif resource_type == 'S3':
-        return 'S3 Log'
-    elif resource_type == 'Lambda':
-        return 'Lambda Log'
+# Action-Resource Combination
+logs_df['action_resource_combo'] = logs_df['action'] + '_' + logs_df['resource_type']
 
-event_types = [assign_event_type(rt) for rt in random_resource_types]
+# 3. Anomaly Indicators
 
-# Step 5: Define possible actions for each resource type
-action_options = {
-    'EC2': ['StartInstance', 'StopInstance', 'RebootInstance', 'TerminateInstance', 'AttachVolume'],
-    'Lambda': ['InvokeFunction', 'FunctionError', 'FunctionTimeout', 'FunctionSuccess', 'CreateFunction'],
-    'S3': ['PutObject', 'GetObject', 'DeleteObject', 'ListBucket', 'CopyObject'],
-    'VPC': ['CreateVPC', 'DeleteVPC', 'ModifyVPC', 'CreateSubnet', 'RouteTableChange']
-}
+# High Response Code Indicator (4xx or 5xx)
+logs_df['is_high_response_code'] = logs_df['response_code'].apply(lambda x: 1 if int(x) >= 400 else 0)
 
-# Assign random actions based on resource type
-actions = [random.choice(action_options[rt]) for rt in random_resource_types]
+# Consecutive Failed Actions per User
+logs_df['failed_action_shift'] = logs_df.groupby('user')['failed_action'].shift(1, fill_value=0)
+logs_df['consecutive_failed_actions'] = logs_df.apply(lambda row: row['failed_action_shift'] + row['failed_action'] if row['failed_action_shift'] == 1 else row['failed_action'], axis=1)
 
-# Randomly generate regions with a bias towards 'us-east-1'
-num_us_east_1 = int(num_rows * 0.9)
-num_other_regions = num_rows - num_us_east_1
+# Drop the temporary column
+logs_df.drop('failed_action_shift', axis=1, inplace=True)
 
-regions = ['us-east-1'] * num_us_east_1
-regions += random.choices(['us-west-2', 'eu-central-1', 'ap-southeast-2'], k=num_other_regions)
+# Aggregate Features
 
-# Ensure regions list matches num_rows
-random.shuffle(regions)
-regions = regions[:num_rows]
+# Mean response code per user
+logs_df['mean_response_code'] = logs_df.groupby('user')['response_code'].transform(lambda x: x.astype(int).mean())
 
-# Randomly generate response codes
-response_codes = []
-for rt in random_resource_types:
-    if rt == 'Lambda':
-        response_codes.append(random.choice(["200", "403", "404", "500"]))
-    elif rt == 'S3':
-        response_codes.append(random.choice(["200", "201", "204", "403", "404"]))
-    elif rt == 'VPC':
-        response_codes.append(random.choice(["100", "200", "400", "403"]))
-    elif rt == 'EC2':
-        response_codes.append(random.choice(["200", "400", "403", "500"]))
+# Mean hour per user
+logs_df['mean_hour'] = logs_df.groupby('user')['hour'].transform('mean')
 
-# Step 6: Create the DataFrame
-logs_df = pd.DataFrame({
-    'timestamp': date_range,
-    'user': users,
-    'resource_type': random_resource_types,
-    'event_type': event_types,
-    'action': actions,
-    'region': regions,
-    'response_code': response_codes
-})
+# Advanced Features
 
-# 1. Time-based Features
-logs_df['hour'] = logs_df['timestamp'].dt.hour
+# 1. User Entropy: Measure unpredictability of user actions
+def calculate_user_entropy(df):
+    user_action_counts = df.groupby('user')['action'].value_counts()
+    user_entropy = user_action_counts.groupby('user').apply(lambda x: entropy(x))
+    return user_entropy
 
-def is_unusual_hour(hour):
-    return int(hour < 9 or hour > 17)
+logs_df['user_entropy'] = logs_df['user'].map(calculate_user_entropy(logs_df))
 
-logs_df['unusual_hour'] = logs_df['hour'].apply(is_unusual_hour)
+# 2. System Usage
 
-# 2. Geographical Anomalies
-normal_regions = ['us-east-1']
-logs_df['geo_anomaly'] = logs_df['region'].apply(lambda x: 1 if x not in normal_regions else 0)
+# Usage Rate: Number of actions per hour
+logs_df['usage_rate'] = logs_df.groupby('user')['timestamp'].transform(lambda x: x.count() / ((pd.to_datetime(x.max()) - pd.to_datetime(x.min())).total_seconds() / 3600))
 
-# Calculate the number of anomalies needed (15% of the total rows)
-num_anomalies = int(num_rows * 0.15)
-non_anomaly_indices = logs_df[logs_df['geo_anomaly'] == 0].index.tolist()
-random_anomaly_indices = random.sample(non_anomaly_indices, num_anomalies)
-logs_df.loc[random_anomaly_indices, 'geo_anomaly'] = 1
+# Action Diversity: Unique actions performed by user
+logs_df['action_diversity'] = logs_df.groupby('user')['action'].transform('nunique')
 
-# 3. Failed Actions
-# Set 24% of the failed_action column to 1
-num_failures = int(num_rows * 0.24)
+# 3. Error Analysis
 
-# Initialize the failed_action column to 0
-logs_df['failed_action'] = 0
+# Response Code Distribution: Measure how user's response code distribution differs from normal
+response_code_distribution = logs_df.groupby('user')['response_code'].value_counts(normalize=True).unstack(fill_value=0)
+average_distribution = response_code_distribution.mean()
+logs_df['response_code_divergence'] = logs_df['user'].map(lambda user: np.linalg.norm(response_code_distribution.loc[user] - average_distribution))
 
-# Randomly select indices to set as failed actions
-failure_indices = random.sample(logs_df.index.tolist(), num_failures)
+# Consecutive High-Response Codes: Count of consecutive high response codes
+logs_df['consecutive_high_response'] = logs_df['response_code'].apply(lambda x: 1 if int(x) >= 400 else 0)
+logs_df['consecutive_high_response'] = logs_df.groupby('user')['consecutive_high_response'].transform(lambda x: x.rolling(window=2).sum())
 
-# Set the selected indices to 1
-logs_df.loc[failure_indices, 'failed_action'] = 1
+# 4. Temporal Features
 
-# Aggregate the count of failed actions per user
-failed_actions_count = logs_df.groupby('user')['failed_action'].sum().reset_index()
-failed_actions_count.columns = ['user', 'failed_actions_count']
+# Time Since Last Action
+logs_df['timestamp'] = pd.to_datetime(logs_df['timestamp'])
+logs_df = logs_df.sort_values(by=['user', 'timestamp'])
+logs_df['time_since_last_action'] = logs_df.groupby('user')['timestamp'].diff().dt.total_seconds().fillna(0)
 
-# Merge the count back into the main DataFrame
-logs_df = logs_df.merge(failed_actions_count, on='user', how='left')
+# Session Length: Define sessions and measure their lengths
+session_threshold = 1800  # 30 minutes threshold for a session break
 
-# 4. Session-based Features
-logs_df.set_index('timestamp', inplace=True)
+# Fix the incompatible index issue by resetting the index
+session_df = logs_df.groupby('user')['time_since_last_action'].apply(lambda x: (x > session_threshold).cumsum())
+session_df = session_df.reset_index(level=0, drop=True)
+logs_df['session'] = session_df
 
-def aggregate_session_features(df, window='1h'):
-    session_features = df.groupby('user').resample(window).size().reset_index(name='action_count')
-    df = df.merge(session_features, on=['user', 'timestamp'], how='left')
-    return df
+session_lengths = logs_df.groupby(['user', 'session']).size()
+logs_df['avg_session_length'] = logs_df['user'].map(session_lengths.groupby('user').mean())
 
-logs_df = aggregate_session_features(logs_df)
-logs_df.reset_index(inplace=True)
+# 5. Geographical and Resource Interaction
 
-# Update action_count based on the total number of actions per user
-logs_df['action_count'] = logs_df.groupby('user')['action'].transform('count')
+# Region-Resource Interaction: Encode the interaction between regions and resource types
+logs_df['region_resource_interaction'] = logs_df['region'] + '_' + logs_df['resource_type']
 
-# Save the modified DataFrame to a new CSV file
-logs_df.to_csv("/Users/davidstroud/cloud_logs/anomaly_detection/engineered_logs_100k.csv", index=False)
+# Cross-Region Access: Count distinct regions accessed by a user
+logs_df['cross_region_access'] = logs_df.groupby('user')['region'].transform('nunique')
 
-# Display the DataFrame with the new features
+# Check the dataset with the new features
 print(logs_df.head())
+
+# Save the enhanced dataset with new features
+logs_df.to_csv("/Users/davidstroud/cloud_logs/anomaly_detection/engineered_logs_with_advanced_features_combined.csv", index=False)
